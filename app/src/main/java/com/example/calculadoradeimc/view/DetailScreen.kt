@@ -50,6 +50,6 @@ fun DetailScreen(data: HealthData, onBack: () -> Unit) {
 @Preview
 @Composable
 private fun DetailPreview() {
-    val exemplo = HealthData(70.0, 170.0, 25, "M", 24.2, "Normal", 1650.0, 68.5, 18.5, "15/12/2025")
+    val exemplo = HealthData(0, 70.0, 170.0, 25, "M", 24.2, "Normal", 1650.0, 68.5, 18.5, "15/12/2025")
     DetailScreen(data = exemplo, onBack = {})
 }

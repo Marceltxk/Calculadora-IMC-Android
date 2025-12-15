@@ -202,7 +202,7 @@ fun Home(irParaHistorico: () -> Unit, viewModel: ImcViewModel) {
                             else -> "Obesidade"
                         }
 
-                        viewModel.salvar(HealthData(w, h, i, sexo, imc, cls, tmb, pi, gd, viewModel.getDataAtual()))
+                        viewModel.salvar(HealthData(0, w, h, i, sexo, imc, cls, tmb, pi, gd, viewModel.getDataAtual()))
                         resultMessage = "IMC: %.1f\nTMB: %.0f kcal\nPeso Ideal: %.1f kg\nGordura: %.1f%%".format(imc, tmb, pi, gd)
                     }
                 },
@@ -238,9 +238,10 @@ fun Home(irParaHistorico: () -> Unit, viewModel: ImcViewModel) {
         }
     }
 }
-
+/*
 @Preview
 @Composable
 private fun HomePreview() {
     Home(irParaHistorico = {}, viewModel = ImcViewModel())
 }
+*/

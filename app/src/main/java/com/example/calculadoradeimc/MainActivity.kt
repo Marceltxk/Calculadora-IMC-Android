@@ -11,13 +11,23 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.calculadoradeimc.viewmodel.ImcViewModel
 import com.example.calculadoradeimc.datasource.HealthData
 import com.example.calculadoradeimc.view.DetailScreen
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import android.app.Application
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val vm: ImcViewModel = viewModel()
+            val vm = viewModel<ImcViewModel>(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return ImcViewModel(applicationContext as Application) as T
+                    }
+                }
+            )
             var tela by remember { mutableStateOf("home") }
             var selecionado by remember { mutableStateOf<HealthData?>(null) }
 
