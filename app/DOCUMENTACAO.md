@@ -15,6 +15,7 @@
 ### 1.1 IMC (Índice de Massa Corporal)
 
 O IMC é calculado pela divisão do peso (em quilogramas) pela altura (em metros) ao quadrado:
+
 ```
 IMC = peso / (altura / 100)²
 ```
@@ -92,31 +93,37 @@ Gordura (%) = 1,20 × IMC + 0,23 × idade - 5,4
 
 ## 2. Modelo de Dados
 
-O aplicativo utiliza uma classe de dados (`data class`) simples para representar cada medição:
+O aplicativo utiliza uma `data class` anotada como Entity do Room para representar cada medição:
+
 ```kotlin
+@Entity(tableName = "medicoes")
 data class HealthData(
-    val peso: Double,           // Peso em kg
-    val altura: Double,         // Altura em cm
-    val idade: Int,             // Idade em anos
-    val sexo: String,           // "M" ou "F"
-    val imc: Double,            // IMC calculado
-    val classificacao: String,  // Classificação do IMC
-    val tmb: Double,            // Taxa Metabólica Basal em kcal
-    val pesoIdeal: Double,      // Peso ideal em kg
-    val gordura: Double,        // % de gordura estimado
-    val data: String            // Data/hora da medição
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,              // ID único auto-incrementado
+    val peso: Double,             // Peso em kg
+    val altura: Double,           // Altura em cm
+    val idade: Int,               // Idade em anos
+    val sexo: String,             // "M" ou "F"
+    val imc: Double,              // IMC calculado
+    val classificacao: String,    // Classificação do IMC
+    val tmb: Double,              // Taxa Metabólica Basal em kcal
+    val pesoIdeal: Double,        // Peso ideal em kg
+    val gordura: Double,          // % de gordura estimado
+    val data: String              // Data/hora da medição
 )
 ```
 
 **Justificativa da escolha:**
-- Estrutura simples e imutável (imutabilidade é boa prática em Kotlin)
+- Estrutura imutável (imutabilidade é boa prática em Kotlin)
+- Anotações Room (@Entity, @PrimaryKey) permitem persistência automática
+- ID auto-incrementado garante unicidade de cada registro
 - Todos os dados necessários agrupados em um único objeto
-- Facilita passagem de dados entre telas
-- Compatível com futuras implementações de banco de dados
+- Compatível com banco de dados SQLite via Room
 
 **Exemplo de instância:**
 ```kotlin
 HealthData(
+    id = 1,
     peso = 70.0,
     altura = 170.0,
     idade = 25,
@@ -134,177 +141,189 @@ HealthData(
 
 ## 3. Implementação da Persistência
 
-### 3.1 Solução Atual: Armazenamento em Memória
+### 3.1 Solução Implementada: Room Database
 
-O aplicativo utiliza **StateFlow** no ViewModel para armazenar o histórico de medições em memória RAM durante a sessão:
+O aplicativo utiliza **Room** (biblioteca oficial do Android) para persistência local permanente dos dados.
+
+#### 3.1.1 Estrutura do Room
+
+**Entity (HealthData.kt):**
 ```kotlin
-class ImcViewModel : ViewModel() {
-    private val _historico = MutableStateFlow<List<HealthData>>(emptyList())
-    val historico: StateFlow<List<HealthData>> = _historico
+@Entity(tableName = "medicoes")
+data class HealthData(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    // ... demais campos
+)
+```
+
+**DAO - Data Access Object (MedicaoDao.kt):**
+```kotlin
+@Dao
+interface MedicaoDao {
+    @Insert
+    suspend fun inserir(medicao: HealthData)
     
-    fun salvar(data: HealthData) {
-        _historico.value = _historico.value + data
-    }
+    @Query("SELECT * FROM medicoes ORDER BY id DESC")
+    suspend fun listar(): List<HealthData>
+}
+```
+
+**Database (AppDatabase.kt):**
+```kotlin
+@Database(entities = [HealthData::class], version = 1, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun medicaoDao(): MedicaoDao
     
-    fun getLista(): List<HealthData> {
-        return _historico.value
+    companion object {
+        private var instancia: AppDatabase? = null
+        
+        fun getDatabase(context: Context): AppDatabase {
+            return instancia ?: Room.databaseBuilder(
+                context,
+                AppDatabase::class.java,
+                "imc_database"
+            ).build().also { instancia = it }
+        }
     }
 }
 ```
 
-**Vantagens desta abordagem:**
-- Simplicidade de implementação
-- Sem dependências externas
-- Rápido acesso aos dados
-- Adequado para escopo acadêmico
+#### 3.1.2 Integração com ViewModel
 
-**Limitações:**
-- Dados perdidos ao fechar o aplicativo
-- Não há sincronização entre dispositivos
-- Limitado pela memória RAM disponível
+```kotlin
+class ImcViewModel(application: Application) : AndroidViewModel(application) {
+    private val dao = AppDatabase.getDatabase(application).medicaoDao()
+    private val _historico = MutableStateFlow<List<HealthData>>(emptyList())
+    
+    init {
+        carregarHistorico()
+    }
+    
+    fun salvar(data: HealthData) {
+        viewModelScope.launch {
+            dao.inserir(data)
+            carregarHistorico()
+        }
+    }
+}
+```
 
-### 3.2 Por que não usamos Room Database?
+### 3.2 Vantagens da Solução Room
 
-Durante o desenvolvimento, consideramos usar Room (biblioteca oficial do Android para persistência local), mas optamos pela solução em memória devido a:
+- **Persistência permanente:** Dados mantidos mesmo após fechar o aplicativo
+- **Type-safe:** Queries verificadas em tempo de compilação
+- **Integração com Coroutines:** Operações assíncronas simplificadas
+- **Biblioteca oficial:** Suporte e documentação do Google
+- **Abstração de SQLite:** Não precisa escrever SQL manualmente
 
-1. **Complexidade adicional**: Room requer configuração de DAO, Entity annotations e Database abstract class
-2. **Tempo de desenvolvimento**: O prazo curto do trabalho exigia foco nas funcionalidades principais
-3. **Requisitos do projeto**: O trabalho não exigia persistência permanente obrigatória
-4. **Simplicidade do código**: Facilita a apresentação e explicação durante a avaliação
+### 3.3 Fluxo de Dados
+
+1. Usuário calcula IMC na tela Home
+2. ViewModel recebe dados e chama `dao.inserir()`
+3. Room salva no banco SQLite local
+4. ViewModel atualiza StateFlow após inserção
+5. Tela de histórico observa StateFlow e atualiza automaticamente
+6. Dados persistem no disco (pasta `/data/data/package/databases/`)
 
 ---
 
 ## 4. Melhorias Futuras
 
-### 4.1 Persistência com Room Database
+### 4.1 Funcionalidades Adicionais no Room
 
-**Implementação:** Usar Room para salvar dados permanentemente no SQLite local do Android.
-
-**Código exemplo:**
+**Operações CRUD completas:**
 ```kotlin
-@Entity(tableName = "measurements")
-data class Measurement(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val peso: Double,
-    val altura: Double,
-    // ... demais campos
-)
-
 @Dao
-interface MeasurementDao {
+interface MedicaoDao {
     @Insert
-    suspend fun insert(measurement: Measurement)
+    suspend fun inserir(medicao: HealthData)
     
-    @Query("SELECT * FROM measurements ORDER BY date DESC")
-    fun getAll(): Flow<List<Measurement>>
+    @Update
+    suspend fun atualizar(medicao: HealthData)
+    
+    @Delete
+    suspend fun deletar(medicao: HealthData)
+    
+    @Query("SELECT * FROM medicoes WHERE id = :id")
+    suspend fun buscarPorId(id: Int): HealthData?
 }
 ```
 
-**Benefícios:** Histórico permanente, queries otimizadas, suporte a relações complexas.
+**Benefícios:** Permitiria editar ou excluir medições antigas.
 
-### 4.2 Integração com API Externa de Saúde
+### 4.2 Visualizações Gráficas
 
-**Possibilidades:**
-- **Google Fit API**: Sincronizar peso e altura automaticamente
-- **Apple HealthKit** (para versão iOS futura)
-- **Fitbit API**: Importar dados de dispositivos wearables
-- **MyFitnessPal API**: Integrar com diário alimentar
-
-**Exemplo de uso:**
-```kotlin
-// Pseudo-código
-val googleFitClient = GoogleFit.getClient(context)
-val weightData = googleFitClient.readData(DataType.WEIGHT)
-// Usar dados para cálculo automático
-```
-
-### 4.3 Autenticação de Usuário
-
-**Implementação com Firebase Authentication:**
-- Login com email/senha
-- Login social (Google, Facebook)
-- Cada usuário teria seu próprio histórico
-
-**Benefícios:**
-- Múltiplos usuários no mesmo dispositivo
-- Sincronização na nuvem (Firestore)
-- Acesso de qualquer dispositivo
-
-### 4.4 Visualizações Gráficas
-
-**Biblioteca sugerida:** Vico Chart ou MPAndroidChart
+**Biblioteca sugerida:** MPAndroidChart ou Vico Chart
 
 **Gráficos a implementar:**
-- Evolução do IMC ao longo do tempo (linha)
-- Comparação TMB vs consumo calórico (barras)
-- Distribuição de classificações de IMC (pizza)
+- Evolução do IMC ao longo do tempo (gráfico de linha)
+- Comparação TMB vs período (gráfico de barras)
+- Distribuição de classificações de IMC (gráfico de pizza)
 
-**Código exemplo com Vico:**
+**Consulta SQL necessária:**
 ```kotlin
-Chart(
-    chart = lineChart(),
-    model = entryModelOf(historico.map { it.imc }),
-    startAxis = startAxis(),
-    bottomAxis = bottomAxis()
-)
+@Query("SELECT * FROM medicoes ORDER BY data ASC")
+suspend fun listarParaGrafico(): List<HealthData>
 ```
 
-### 4.5 Notificações e Lembretes
+### 4.3 Exportação de Dados
 
-**Implementação:** WorkManager para agendamento
+**Implementação com Room:**
 ```kotlin
-val reminderWork = PeriodicWorkRequestBuilder<ReminderWorker>(7, TimeUnit.DAYS)
-    .build()
-WorkManager.getInstance(context).enqueue(reminderWork)
-```
-
-**Funcionalidade:** Lembrar usuário de registrar medições semanais.
-
-### 4.6 Exportação de Dados
-
-**Formatos sugeridos:**
-- **CSV**: Para análise em Excel/Google Sheets
-- **PDF**: Relatório visual formatado
-- **JSON**: Para backup e portabilidade
-
-**Exemplo de exportação CSV:**
-```kotlin
-fun exportarCSV(historico: List<HealthData>): String {
-    return "Data,Peso,Altura,IMC,TMB\n" +
-           historico.joinToString("\n") { 
-               "${it.data},${it.peso},${it.altura},${it.imc},${it.tmb}"
+suspend fun exportarCSV(): String {
+    val medicoes = dao.listar()
+    return "ID,Data,Peso,Altura,IMC,TMB\n" +
+           medicoes.joinToString("\n") { 
+               "${it.id},${it.data},${it.peso},${it.altura},${it.imc},${it.tmb}"
            }
 }
 ```
 
-### 4.7 Cálculo de Necessidade Calórica Diária
+### 4.4 Backup em Nuvem (Firebase)
 
-**Fórmula:** TMB × Fator de Atividade
+**Sincronização Room + Firebase:**
+- Manter Room como fonte local primária
+- Sincronizar com Firestore periodicamente
+- Resolver conflitos por timestamp (last-write-wins)
 
-| Nível de Atividade | Fator |
-|-------------------|-------|
-| Sedentário | 1.2 |
-| Levemente ativo | 1.375 |
-| Moderadamente ativo | 1.55 |
-| Muito ativo | 1.725 |
-| Extremamente ativo | 1.9 |
+### 4.5 Migration de Banco de Dados
 
-**Interface sugerida:** Slider ou RadioButtons para selecionar nível de atividade.
-
-### 4.8 Suporte a Múltiplas Unidades
-
-**Implementação:**
-- Toggle entre Sistema Métrico (kg/cm) e Imperial (lb/in)
-- Conversão automática nos cálculos
-
-### 4.9 Modo Escuro
-
-**Implementação:** Tema escuro com Material 3
+**Para adicionar novos campos:**
 ```kotlin
-@Composable
-fun AppTheme(darkTheme: Boolean = isSystemInDarkTheme()) {
-    val colors = if (darkTheme) darkColorScheme() else lightColorScheme()
-    MaterialTheme(colorScheme = colors) { /* ... */ }
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE medicoes ADD COLUMN observacoes TEXT")
+    }
+}
+```
+
+### 4.6 Autenticação Multi-usuário
+
+**Adicionar campo userId:**
+```kotlin
+@Entity(tableName = "medicoes")
+data class HealthData(
+    // ... campos existentes
+    val userId: String = "default"
+)
+```
+
+**Query por usuário:**
+```kotlin
+@Query("SELECT * FROM medicoes WHERE userId = :userId ORDER BY id DESC")
+suspend fun listarPorUsuario(userId: String): List<HealthData>
+```
+
+### 4.7 Notificações Periódicas
+
+**WorkManager + Room:**
+```kotlin
+class LembreteWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
+    override fun doWork(): Result {
+        // Notificar usuário para fazer nova medição
+        return Result.success()
+    }
 }
 ```
 
@@ -312,9 +331,16 @@ fun AppTheme(darkTheme: Boolean = isSystemInDarkTheme()) {
 
 ## 5. Conclusão
 
-O aplicativo desenvolvido atende aos requisitos propostos, implementando cálculo de IMC e três métricas adicionais de saúde (TMB, Peso Ideal e Gordura Corporal). A arquitetura MVVM simplificada proporciona separação clara de responsabilidades e facilita manutenção futura.
+O aplicativo desenvolvido atende plenamente aos requisitos propostos, implementando:
+- Cálculo de IMC e três métricas adicionais (TMB, Peso Ideal, Gordura)
+- Arquitetura MVVM com separação clara de responsabilidades
+- Persistência permanente com Room Database
+- Interface intuitiva com Jetpack Compose
+- Histórico ordenado e detalhamento de medições
 
-A escolha por armazenamento em memória foi adequada ao escopo acadêmico, mas as melhorias sugeridas (especialmente Room Database e visualizações gráficas) tornariam o aplicativo viável para uso real em contextos de saúde e bem-estar.
+A escolha por Room Database garante que os dados do usuário sejam mantidos de forma segura e eficiente no dispositivo, cumprindo o requisito de persistência local. A arquitetura implementada facilita manutenção futura e adição de novas funcionalidades.
+
+O projeto demonstra conhecimento prático de desenvolvimento Android moderno, utilizando as melhores práticas e bibliotecas oficiais recomendadas pelo Google.
 
 ---
 
@@ -323,4 +349,5 @@ A escolha por armazenamento em memória foi adequada ao escopo acadêmico, mas a
 1. Mifflin MD, St Jeor ST, et al. "A new predictive equation for resting energy expenditure in healthy individuals." Am J Clin Nutr. 1990.
 2. Devine BJ. "Gentamicin therapy." Drug Intell Clin Pharm. 1974.
 3. Android Developers. "Guide to app architecture." https://developer.android.com/topic/architecture
-4. Jetpack Compose Documentation. https://developer.android.com/jetpack/compose
+4. Android Developers. "Save data in a local database using Room." https://developer.android.com/training/data-storage/room
+5. Jetpack Compose Documentation. https://developer.android.com/jetpack/compose

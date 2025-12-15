@@ -18,10 +18,10 @@ O aplicativo calcula as seguintes métricas de saúde:
 
 ### Histórico de Medições
 
-O aplicativo mantém um histórico de todas as medições realizadas durante a sessão, permitindo:
-- Visualizar lista de medições anteriores
+O aplicativo mantém um histórico permanente de todas as medições realizadas usando Room Database, permitindo:
+- Visualizar lista de medições anteriores ordenadas por data
 - Acessar detalhes completos de cada medição
-- Consultar data e hora de cada registro
+- Dados persistem mesmo após fechar o aplicativo
 
 ## Telas do Aplicativo
 
@@ -114,20 +114,23 @@ Gordura (%) = 1.20 × IMC + 0.23 × idade - 5.4
 
 ## Arquitetura e Organização do Código
 
-O projeto segue uma arquitetura **MVVM simplificada** (Model-View-ViewModel):
+O projeto segue uma arquitetura **MVVM** (Model-View-ViewModel):
 
 ### Estrutura de Pastas
+
 ```
 com.example.calculadoradeimc/
 ├── datasource/
 │   ├── Calculations.kt      # Funções de cálculo (IMC, TMB, etc)
-│   └── HealthData.kt         # Modelo de dados
+│   ├── HealthData.kt         # Entity do Room Database
+│   ├── MedicaoDao.kt         # Interface DAO para operações no banco
+│   └── AppDatabase.kt        # Configuração do Room Database
 ├── view/
 │   ├── Home.kt              # Tela principal
 │   ├── HistoryScreen.kt     # Tela de histórico
 │   └── DetailScreen.kt      # Tela de detalhes
 ├── viewmodel/
-│   └── ImcViewModel.kt      # Gerenciamento de estado
+│   └── ImcViewModel.kt      # Gerenciamento de estado e lógica
 ├── ui/theme/
 │   ├── Color.kt
 │   ├── Theme.kt
@@ -142,11 +145,12 @@ com.example.calculadoradeimc/
 - **View (Composables)**: Apenas interface gráfica, sem lógica de negócio
 - **ViewModel**: Gerencia o estado e coordena a lógica
 - **Calculations**: Contém todas as fórmulas e cálculos isolados
-- **Model (HealthData)**: Estrutura de dados simples
+- **Model (HealthData)**: Entity do Room com estrutura de dados
 
 #### 2. Gerenciamento de Estado
 
-Utilizamos `StateFlow` no ViewModel para manter o histórico de medições em memória durante a sessão do aplicativo.
+Utilizamos `StateFlow` no ViewModel para manter o histórico sincronizado com o banco de dados Room.
+
 ```kotlin
 private val _historico = MutableStateFlow<List<HealthData>>(emptyList())
 val historico: StateFlow<List<HealthData>> = _historico
@@ -154,24 +158,39 @@ val historico: StateFlow<List<HealthData>> = _historico
 
 #### 3. Navegação
 
-Implementamos navegação simples usando `when` e estados booleanos no `MainActivity`, adequado para um aplicativo de 3 telas.
+Implementamos navegação simples usando `when` e estados no `MainActivity`, adequado para um aplicativo de 3 telas.
 
-#### 4. Armazenamento de Dados
+#### 4. Persistência de Dados
 
-**Decisão:** Armazenamento em memória (lista no ViewModel)
+**Decisão:** Room Database (SQLite)
 
-**Justificativa:** Para este trabalho acadêmico, optamos pela simplicidade. O histórico persiste durante a sessão do app, o que é suficiente para demonstrar a funcionalidade.
+**Implementação:**
+- **Entity**: `HealthData` com anotações Room (@Entity, @PrimaryKey)
+- **DAO**: `MedicaoDao` com operações de inserção e listagem
+- **Database**: `AppDatabase` com padrão Singleton
 
-**Alternativa futura:** Para uma versão de produção, seria recomendado usar Room Database para persistência permanente dos dados.
+**Justificativa:** Room oferece persistência permanente dos dados, mantendo o histórico mesmo após o aplicativo ser fechado.
+
+```kotlin
+@Entity(tableName = "medicoes")
+data class HealthData(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    val peso: Double,
+    val altura: Double,
+    // ... demais campos
+)
+```
 
 ## Tecnologias Utilizadas
 
 - **Linguagem**: Kotlin
 - **UI**: Jetpack Compose
 - **Arquitetura**: MVVM
-- **Gerenciamento de Estado**: StateFlow
+- **Persistência**: Room Database
+- **Gerenciamento de Estado**: StateFlow + Coroutines
 - **SDK Mínimo**: Android 7.0 (API 24)
-- **SDK Alvo**: Android 14 (API 34)
+- **SDK Alvo**: Android 14 (API 36)
 
 ## Como Executar
 
@@ -182,13 +201,14 @@ Implementamos navegação simples usando `when` e estados booleanos no `MainActi
 
 ## Melhorias Futuras
 
-1. **Persistência com Room Database**: Manter histórico permanente mesmo após fechar o app
-2. **Gráficos de Evolução**: Visualizar progresso do IMC e TMB ao longo do tempo
-3. **Exportação de Dados**: Permitir exportar histórico em CSV ou PDF
-4. **Notificações**: Lembrete para realizar medições periódicas
-5. **Autenticação**: Sistema de login para múltiplos usuários
-6. **Integração com APIs**: Conectar com serviços de saúde externos
+1. **Gráficos de Evolução**: Visualizar progresso do IMC e TMB ao longo do tempo usando bibliotecas como MPAndroidChart
+2. **Exportação de Dados**: Permitir exportar histórico em formato CSV ou PDF
+3. **Notificações**: Lembrete para realizar medições periódicas
+4. **Autenticação**: Sistema de login para múltiplos usuários
+5. **Sincronização na Nuvem**: Backup automático usando Firebase
+6. **Integração com APIs de Saúde**: Conectar com Google Fit ou Apple HealthKit
 7. **Modo Escuro**: Tema dark para melhor experiência visual
+8. **Edição/Exclusão de Registros**: Permitir modificar ou remover medições antigas
 
 ## Referências
 
@@ -196,3 +216,4 @@ Implementamos navegação simples usando `when` e estados booleanos no `MainActi
 - [Android Studio: Criando um App de Calculadora de IMC - Parte 2](https://www.youtube.com/watch?v=m9P7hYD50KM)
 - Fórmula Mifflin-St Jeor: Mifflin MD, et al. (1990)
 - Fórmula Devine: Devine BJ (1974)
+- Room Persistence Library: https://developer.android.com/training/data-storage/room
