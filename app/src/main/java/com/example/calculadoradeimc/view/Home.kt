@@ -34,16 +34,20 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calculadoradeimc.datasource.Calculations
+import com.example.calculadoradeimc.viewmodel.ImcViewModel
+import com.example.calculadoradeimc.datasource.HealthData
 import com.example.calculadoradeimc.ui.theme.Blue
 import com.example.calculadoradeimc.ui.theme.Red
 import com.example.calculadoradeimc.ui.theme.White
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Home() {
+fun Home(irParaHistorico: () -> Unit, viewModel: ImcViewModel) {
 
     var height by remember {mutableStateOf("")}
     var weight by remember {mutableStateOf("")}
+    var idade by remember {mutableStateOf("")}
+    var sexo by remember {mutableStateOf("M")}
     var resultMessage by remember {mutableStateOf("")}
     var textFieldError by remember {mutableStateOf(false)}
 
@@ -146,12 +150,61 @@ fun Home() {
                 )
             }
 
+            OutlinedTextField(
+                value = idade,
+                onValueChange = { if (it.length <= 3) idade = it },
+                label = { Text(text = "Idade") },
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = TextFieldDefaults.colors(
+                    unfocusedContainerColor = White,
+                    focusedContainerColor = White,
+                    focusedLabelColor = Blue,
+                    focusedIndicatorColor = Blue,
+                    cursorColor = Blue
+                )
+            )
+
+            Row(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                Text("Sexo: ", fontSize = 18.sp)
+                Button(onClick = { sexo = "M" }, colors = ButtonDefaults.buttonColors(
+                    containerColor = if(sexo == "M") Blue else White
+                )) {
+                    Text("M", color = if(sexo == "M") White else Blue)
+                }
+                Button(onClick = { sexo = "F" }, colors = ButtonDefaults.buttonColors(
+                    containerColor = if(sexo == "F") Blue else White
+                )) {
+                    Text("F", color = if(sexo == "F") White else Blue)
+                }
+            }
+
             Button(
                 onClick = {
-                    Calculations.calculateIMC(height = height, weight = weight, response = {result,textFieldState ->
-                        resultMessage = result
-                        textFieldError = textFieldState
-                    })
+                    if (height.isEmpty() || weight.isEmpty() || idade.isEmpty()) {
+                        resultMessage = "Preencha todos os campos!"
+                        textFieldError = true
+                    } else {
+                        textFieldError = false
+                        val h = height.toDouble()
+                        val w = weight.replace(",",".").toDouble()
+                        val i = idade.toInt()
+
+                        val imc = w / (h/100 * h/100)
+                        val tmb = Calculations.calcularTMB(w, h, i, sexo)
+                        val pi = Calculations.calcularPesoIdeal(h, sexo)
+                        val gd = Calculations.calcularGordura(imc, i, sexo)
+
+                        val cls = when {
+                            imc < 18.5 -> "Abaixo do peso"
+                            imc < 25.0 -> "Normal"
+                            imc < 30.0 -> "Sobrepeso"
+                            else -> "Obesidade"
+                        }
+
+                        viewModel.salvar(HealthData(w, h, i, sexo, imc, cls, tmb, pi, gd, viewModel.getDataAtual()))
+                        resultMessage = "IMC: %.1f\nTMB: %.0f kcal\nPeso Ideal: %.1f kg\nGordura: %.1f%%".format(imc, tmb, pi, gd)
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Blue
@@ -174,6 +227,14 @@ fun Home() {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(10.dp)
             )
+
+            Button(
+                onClick = irParaHistorico,
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) {
+                Text("Ver Histórico", color = White)
+            }
         }
     }
 }
@@ -181,5 +242,5 @@ fun Home() {
 @Preview
 @Composable
 private fun HomePreview() {
-    Home()
+    Home(irParaHistorico = {}, viewModel = ImcViewModel())
 }

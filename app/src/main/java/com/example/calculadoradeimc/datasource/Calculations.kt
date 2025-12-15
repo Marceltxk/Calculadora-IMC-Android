@@ -33,5 +33,29 @@ object Calculations {
 
     }
 
+    fun calcularTMB(peso: Double, altura: Double, idade: Int, sexo: String): Double {
+        return if (sexo == "M") {
+            10 * peso + 6.25 * altura - 5 * idade + 5
+        } else {
+            10 * peso + 6.25 * altura - 5 * idade - 161
+        }
+    }
+
+    fun calcularPesoIdeal(altura: Double, sexo: String): Double {
+        return if (sexo == "M") {
+            50 + 0.91 * (altura - 152.4)
+        } else {
+            45.5 + 0.91 * (altura - 152.4)
+        }
+    }
+
+    fun calcularGordura(imc: Double, idade: Int, sexo: String): Double {
+        return if (sexo == "M") {
+            1.20 * imc + 0.23 * idade - 16.2
+        } else {
+            1.20 * imc + 0.23 * idade - 5.4
+        }
+    }
+
 
 }
