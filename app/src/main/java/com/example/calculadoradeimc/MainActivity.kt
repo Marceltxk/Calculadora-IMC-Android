@@ -9,6 +9,8 @@ import com.example.calculadoradeimc.view.Home
 import com.example.calculadoradeimc.view.HistoryScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.calculadoradeimc.viewmodel.ImcViewModel
+import com.example.calculadoradeimc.datasource.HealthData
+import com.example.calculadoradeimc.view.DetailScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,12 +18,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val vm: ImcViewModel = viewModel()
-            var mostrarHistorico by remember { mutableStateOf(false) }
+            var tela by remember { mutableStateOf("home") }
+            var selecionado by remember { mutableStateOf<HealthData?>(null) }
 
-            if (mostrarHistorico) {
-                HistoryScreen(onBack = { mostrarHistorico = false }, lista = vm.getLista())
-            } else {
-                Home(irParaHistorico = { mostrarHistorico = true }, viewModel = vm)
+            when(tela) {
+                "home" -> Home(irParaHistorico = { tela = "historico" }, viewModel = vm)
+                "historico" -> HistoryScreen(
+                    onBack = { tela = "home" },
+                    lista = vm.getLista(),
+                    onItemClick = { item ->
+                        selecionado = item
+                        tela = "detalhes"
+                    }
+                )
+                "detalhes" -> selecionado?.let {
+                    DetailScreen(data = it, onBack = { tela = "historico" })
+                }
             }
         }
     }

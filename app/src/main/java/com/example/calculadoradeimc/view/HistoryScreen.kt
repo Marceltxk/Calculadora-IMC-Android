@@ -13,7 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen(onBack: () -> Unit, lista: List<HealthData>) {
+fun HistoryScreen(onBack: () -> Unit, lista: List<HealthData>, onItemClick: (HealthData) -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -31,7 +31,10 @@ fun HistoryScreen(onBack: () -> Unit, lista: List<HealthData>) {
             } else {
                 LazyColumn {
                     items(lista) { item ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                            onClick = { onItemClick(item) }
+                        ) {
                             Column(modifier = Modifier.padding(15.dp)) {
                                 Text("Data: ${item.data}")
                                 Text("IMC: %.1f".format(item.imc))
@@ -55,5 +58,5 @@ fun HistoryScreen(onBack: () -> Unit, lista: List<HealthData>) {
 @Preview
 @Composable
 private fun HistoryPreview() {
-    HistoryScreen(onBack = {}, lista = emptyList())
+    HistoryScreen(onBack = {}, lista = emptyList(), onItemClick = {})
 }
